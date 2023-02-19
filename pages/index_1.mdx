@@ -1,0 +1,365 @@
+
+- JPA의 데이터 타입 종류
+    - 엔티티 타입
+    - 값 타입
+        - 기본값 타입
+            - int, String 같은 자바의 기본 타입
+        - 임베디드 타입
+            - 사용자가 직접 정의한 타입
+        - 컬렉션 값 타입
+            - 하나 이상의 값 타입
+
+## 단순한 기본값 타입
+
+- 값 타입인 name, age 속성은 식별자 값도 없고 생명주기가 회원 엔티티에 의존한다.
+
+```java
+@Entity
+public class Member {
+
+	@Id
+  	@GeneratedValue
+	private Long id;
+	private String name;
+  	private int age;
+}
+```
+
+### 임베디드 타입 (복합 값 타입)
+
+- JPA에서는 새로운 값 타입을 직접 정의하여 사용이 가능하다.
+
+```java
+@Entity
+public class Member {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+    private String name;
+    private int age;
+    
+    // 주소를 표현
+    private String city;
+    private String street;
+    private String zipcode;
+
+	// 근무기간을 표현
+	private LocalDateTime startDate;
+	private LocalDateTime endDate;
+}
+```
+
+```java
+@Entity
+public class Member {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+    private String name;
+    private int age;
+    
+    // 집 주소를 표현
+    private String homeCity;
+    private String homeStreet;
+    private String homeZipcode;
+
+    // 회사 주소를 표현
+    private String companyCity;
+    private String companyStreet;
+    private String companyZipcode;
+
+	// 근무기간을 표현
+	private LocalDateTime startDate;
+	private LocalDateTime endDate;
+}
+```
+
+```java
+@Entity
+public class Member {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+    private String name;
+    private int age;
+    
+    // 집 주소를 표현
+	@Embedded
+    private Address homeAddress;
+
+	// 회사 주소를 표현
+	@Embedded
+    private Address companyAddress;
+
+	// 근무기간을 표현
+	@Embedded
+	private Period workPeriod;
+}
+```
+
+```java
+@Embeddable
+public class Address {
+    private String city;
+    private String street;
+    private String zipcode;
+}
+```
+
+```java
+@Embeddable
+public class Period {
+    private LocalDateTime startDate;
+	private LocalDateTime endDate;
+
+	public boolean isWork() {
+		return ...
+	}
+}
+```
+
+- 개선한 회원 엔티티가 더욱 응집력 있고 확장에 용이하다.
+- @Embeddable
+    - 값 타입을 정의하는 곳에 표시
+- @Embedded
+    - 값 타입을 사용하는 것에 표시
+- 임베디드 타입은 기본 생성자 필수!
+- 모든 값 타입은 엔티티의 생명주기에 의존함
+- 우리는 값 타입을 통해 객체지향 모델 설계에 집중할 수 있다!!
+
+### 임베디드 타입과 연관관계
+
+```java
+@Entity
+public class Member {
+	@Embedded Address address;  // 임베디드 타입
+	@Embedded PhoneNumber phoneNumber;  // 임베디드 타입
+}
+```
+
+```java
+@Embeddable
+public class Address {
+    private String city;
+    private String street;
+    @Embedded 
+	private Zipcode zipcode;  // 임베디드 타입
+}
+```
+
+```java
+@Embeddable
+public class Zipcode {
+    private String zip;
+    private String plusFour;
+}
+```
+
+```java
+@Embeddable
+public class PhoneNumber {
+    private String areaCode;
+    private String localNumber;
+	@ManyToOne
+	private PhoneServiceProvider provider: // 엔티티 참조
+}
+```
+
+```java
+@Entity
+public class PhoneServiceProvider {
+	@Id
+	private String name;
+}
+```
+
+### @AttributeOverride: 속성재정의
+
+```java
+@Entity
+public class Member {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+    private String name;
+    private int age;
+    
+    // 집 주소를 표현
+	@Embedded
+    private Address homeAddress;
+
+	// 회사 주소를 표현
+	@Embedded
+	@AttributeOverrides({
+			@AttributeOverride(name="city", column=@Columnn(name = "COMPANY_CTIY")),
+			@AttributeOverride(name="street", column=@Columnn(name = "COMPANY_STREET")),
+			@AttributeOverride(name="zipcode", column=@Columnn(name = "COMPANY_ZIPCODE"))
+	})
+    private Address companyAddress;
+
+	// 근무기간을 표현
+	@Embedded
+	private Period workPeriod;
+}
+```
+
+- 컬럼명이 중복되어 컬럼명을 재정의하는 경우 사용
+- @AttributeOverrides 설정은 엔티티에 설정해야 함
+- 임베디드 타입이 null이면 컬럼 값은 모두 null로 설정
+
+### 값 타입과 불변 객체
+
+- 임베디드 타입을 여러 엔티티에서 공유하면 안됨
+- 같은 인스턴스를 참조하고 있기때문에 둘 다 update 쿼리가 발생
+
+### 값 타입 복사
+
+- 값을 복사해서 사용하면 공유 참조로 인해 발생하는 부작용을 피할 수 있다!
+- 자바의 기본 타입은 항상 복사해서 값을 전달한다. 하지만 객체는 참조 값을 전달하기 때문에 같은 인스턴스를 참조하게 된다.
+
+```java
+Address a = new Address("Old");
+Address b = a.clone(); // 항상 복사를 통해 전달
+```
+
+- 근본적으로 이러한 문제를 해결하기 위한 방법은 객체의 값을 수정하지 못하도록 하는 것이다.
+    - setter를 모두 제거!
+
+### 불변 객체
+
+- 값 타입 복사로 인해 발생할 수 있는 부작용을 원천 차단해보자.
+- 해결책은 바로 immutable Object (불변 객체) 사용
+
+```java
+@Embeddable
+public class Address {
+    private String city;
+
+	protected Address() {}
+
+	public Address(String city) {
+			this.city = city;
+	}
+
+	public String getCity() {
+			return city;
+	}
+
+	// setter 절대 생성 금지!
+}
+```
+
+```java
+Address a = new Address("Old");
+
+// 생성자를 통해 새로운 객체 생성
+Address b = new Address(a.getCity());
+```
+
+<aside>
+💡 Integer, String 자바가 제공하는 대표적인 불변 객체다!
+
+</aside>
+
+- 불변 객체 사용으로 참조를 통한 공유를 막을 수 있다.
+
+### 값 타입의 비교
+
+- 동일성 비교 : 인스턴스의 참조값을 비교, == 사용
+- 동등성 비교 : 인스턴스의 값을 비교, equals() 사용
+- 값 타입을 비교할 때는 equals(), hashCode()를 재정의하여 값을 비교하자!
+
+<aside>
+💡 자바에서 equals()를 재정의하면 hashCode()도 재정의하는 것이 안전하다. 그렇지 않으면 해시를 사용하는 컬렉션(HashSet, HashMap)이 정상 동작하지 않는다.
+
+</aside>
+
+### 값 타입 컬렉션
+
+```java
+@Entity
+public class Member {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    @Embedded
+    private Address address;
+
+    @ElementCollection
+    @CollectionTable(name = "FAVORITE_FOODS", joinColumns = @JoinColumn(name = "MEMBER_ID"))
+    @Column(name = "FOOD_NAME") // 컬럼이 하나인 경우 컬럼명 지정 가능
+    private Set<String> favoriteFoods = new HashSet<>();
+
+    @ElementCollection
+    @CollectionTable(name = "ADDRESS", joinColumns = @JoinColumn(name = "MEMBER_ID"))
+    private Set<String> addressHistory = new HashSet<>();
+}
+```
+
+- 관계형 데이터베이스의 테일블은 컬럼안에 컬렉션을 포함할 수 없다.
+- 별도의 테이블을 추가하고 @CollectionTable 매핑하자!
+
+<aside>
+💡 @CollectionTable를 생략하면 기본값을 사용해서 매핑한다. 기본값: (엔티티이름)_(컬렉션 속성이름). 예를들어 Member 엔티티의 addressHlistory는 Member_addressHistory 테이블과 매핑한다.
+
+</aside>
+
+### 값 타입 컬렉션 사용
+
+```java
+// 기본값 타입 컬렉션 (String)
+member.getFavoriteFoods().add("치킨");
+member.getFavoriteFoods().add("피자");
+
+// 임베디드 값 타입 컬렉션 (Address)
+member.getAddressHistory().add(new Address("newAddress"));
+
+// 영속화
+em.persist(member);
+```
+
+- member 엔티티만 영속화 하더라도 값 타입이 함께 저장한다.
+- 위의 예제의 경우 실행되는 쿼리의 수는?
+    - member 1번
+    - member.favoriteFoods 2번
+    - member.addressHistory 1번
+
+<aside>
+💡 값 타입 컬렉션은 영속성 전이(Cascade) +고아 객체 제거(ORPHAN REMOVE) 기능을 필수로 가진다고 볼 수 있다.
+
+</aside>
+
+- @ElementCollection(fetch = FetchType.LAZY) 설정을 통해 지연 로딩을 지원한다.
+
+### 값 타입 컬렉션의 제약사항
+
+- 실무에서는 값 타입 컬렉션이 매핑된 테이블에 데이터가 많다면 값 타입 대신에 일대다 관계를 고려하자!
+    - 값 타입의 값이 변경되면 데이터베이스에 있는 원본 데이터를 찾기 어렵다.
+
+```java
+@OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+@JoinColumn(name = "member_id")
+private List<Address> addressHistory = new ArrayList<>();
+```
+
+## 값 타입 정리
+
+- 엔티티 타입
+    - 식별자가 존재하기 때문에 식별자로 구별할 수 있다.
+    - 생명주기(영속화, 비영속화)
+    - 참조 값을 통해 공유할 수 있다.
+- 값 타입
+    - 식별자가 없다.
+    - 생명주기를 엔티티에 의존한다.
+    - 참조를 통한 공유하지 않는 것이 안전하다.(불변 객체를 사용)
+    
+    
+
+
+💡 이 글은 자바 ORM 표준 JPA 프로그래밍(김영한) 책을 바탕으로 작성되었습니다.
